@@ -1,0 +1,64 @@
+╔══════════════════════════════════════════════════════════════╗
+║           REACT POS — DEMO USER CREDENTIALS                  ║
+║                  (SQLite Local Backend)                      ║
+╚══════════════════════════════════════════════════════════════╝
+
+These accounts are created automatically when the backend server
+starts for the first time. All users come with sample data
+(products, sales, purchases, and expenses) pre-loaded.
+
+─────────────────────────────────────────────────────────────────
+ ADMIN USER
+─────────────────────────────────────────────────────────────────
+  Name     : Admin User
+  Email    : admin@pos.local
+  Password : Admin@123
+  Role     : admin
+  Access   : Full access + admin panel (/api/admin/users)
+
+─────────────────────────────────────────────────────────────────
+ STORE MANAGER
+─────────────────────────────────────────────────────────────────
+  Name     : Store Manager
+  Email    : manager@pos.local
+  Password : Manager@123
+  Role     : manager
+  Access   : All POS features
+
+─────────────────────────────────────────────────────────────────
+ CASHIER
+─────────────────────────────────────────────────────────────────
+  Name     : Demo Cashier
+  Email    : cashier@pos.local
+  Password : Cashier@123
+  Role     : cashier
+  Access   : All POS features
+
+─────────────────────────────────────────────────────────────────
+ SAMPLE DATA (per user)
+─────────────────────────────────────────────────────────────────
+  Products  : 10 items (Beverages, Bakery, Food)
+  Sales     : 7 transactions over the last 7 days
+  Purchases : 3 supplier orders
+  Expenses  : 7 entries (Rent, Salaries, Utilities, etc.)
+
+─────────────────────────────────────────────────────────────────
+ HOW TO START
+─────────────────────────────────────────────────────────────────
+  1. npm install              (install frontend dependencies)
+  2. cd backend && npm install (install backend dependencies)
+  3. cd ..
+  4. npm run dev              (starts both frontend + backend)
+
+  Frontend : http://localhost:5173
+  Backend  : http://localhost:3001
+  Health   : http://localhost:3001/api/health
+
+─────────────────────────────────────────────────────────────────
+ NOTES
+─────────────────────────────────────────────────────────────────
+  • Database file : backend/pos.db  (auto-created on first run)
+  • Uploads folder: backend/uploads/ (profile pictures)
+  • New users can register from the app — no email verification needed
+  • To reset demo data: delete backend/pos.db and restart the server
+─────────────────────────────────────────────────────────────────

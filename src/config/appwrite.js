@@ -1,253 +1,148 @@
-import { Client, Account, Storage, Databases, ID, Query } from "appwrite";
+/**
+ * api.js — SQLite backend client (replaces appwrite.js)
+ * All auth and data operations go through the local Express server.
+ */
 
-// Read and validate required environment variables up front
-const APPWRITE_ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT;
-const APPWRITE_PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID;
-const APPWRITE_DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+const BASE_URL = "/api"; // proxied by Vite to http://localhost:3001
+const TOKEN_KEY = "pos_auth_token";
 
-if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID) {
-  console.error(
-    "Appwrite configuration is missing. Ensure VITE_APPWRITE_ENDPOINT and VITE_APPWRITE_PROJECT_ID are set in your .env file."
-  );
-}
+// ─── Token helpers ─────────────────────────────────────────────────────────────
+export const getToken = () => {
+  try { return localStorage.getItem(TOKEN_KEY) || null; } catch { return null; }
+};
 
-const client = new Client();
+const saveToken = (token) => {
+  try { localStorage.setItem(TOKEN_KEY, token); } catch {}
+};
 
-// Avoid calling setEndpoint/setProject with undefined to prevent runtime errors
-if (typeof APPWRITE_ENDPOINT === "string" && APPWRITE_ENDPOINT.trim()) {
-  client.setEndpoint(APPWRITE_ENDPOINT);
-}
-if (typeof APPWRITE_PROJECT_ID === "string" && APPWRITE_PROJECT_ID.trim()) {
-  client.setProject(APPWRITE_PROJECT_ID);
-}
+const clearToken = () => {
+  try { localStorage.removeItem(TOKEN_KEY); } catch {}
+};
 
-export const account = new Account(client);
-export const databases = new Databases(client);
-export const storage = new Storage(client);
-
-export const login = async (email, password) => {
-  try {
-    // eslint-disable-next-line no-unused-vars
-    const session = await account.createEmailPasswordSession(email, password);
-    const user = await account.get();
-    return {
-      success: true,
-      data: {
-        ...user,
-        email: user.email,
-        name: user.name,
-        id: user.$id,
-      },
-    };
-  } catch (error) {
-    console.error("Login error:", error);
-    return { success: false, error: error.message };
+// ─── Fetch wrapper ─────────────────────────────────────────────────────────────
+const request = async (method, path, body = null, auth = false) => {
+  const headers = { "Content-Type": "application/json" };
+  if (auth) {
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
   }
+  const opts = { method, headers };
+  if (body !== null) opts.body = JSON.stringify(body);
+
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, opts);
+    const json = await res.json();
+    return json;
+  } catch (err) {
+    console.error(`API ${method} ${path} failed:`, err);
+    return { success: false, error: "Network error – is the backend server running?" };
+  }
+};
+
+// ─── Auth ──────────────────────────────────────────────────────────────────────
+export const login = async (email, password) => {
+  const res = await request("POST", "/auth/login", { email, password });
+  if (res.success && res.token) saveToken(res.token);
+  return res;
 };
 
 export const register = async (email, password, name) => {
-  try {
-    const user = await account.create("unique()", email, password, name);
-    if (user) {
-      // Automatically log in after registration
-      account.createEmailToken(ID.unique(), email, true).then(
-        function (response) {
-          console.log("Success sending otp"); // Success
-          return response;
-        },
-        function (error) {
-          console.log("Failure sending otp", error); // Failure
-        }
-      );
-
-      return {
-        success: true,
-
-        emailVerification: user.emailVerification,
-        userId: user.$id, // Return userId for OTP verification
-      };
-    }
-    return { success: false, error: "Registration failed" };
-  } catch (error) {
-    console.error("Registration error:", error);
-    return { success: false, error: error.message };
-  }
+  const res = await request("POST", "/auth/register", { email, password, name });
+  if (res.success && res.token) saveToken(res.token);
+  // Return shape compatible with old appwrite.js (no OTP needed)
+  return res;
 };
 
-export const verifyOTP = async (userId, secret) => {
-  try {
-    const session = await account.createSession(userId, secret);
-    return { success: true, data: session.data };
-  } catch (error) {
-    console.error("OTP verification error:", error);
-    return { success: false, error: error.message };
-  }
-};
-export const sendPasswordResetEmail = async (email) => {
-  try {
-    await account.createRecovery(
-      email,
-      "http://localhost:5173/password-recovery"
-    );
-    console.log("Password reset email sent successfully");
-    return { success: true };
-  } catch (error) {
-    console.error("Password reset error:", error);
-    return { success: false, error: error.message };
-  }
-};
-export const resetPassword = async (
-  userId,
-  secret,
-  password,
-  confirmPassword
-) => {
-  try {
-    await account.updateRecovery(userId, secret, password, confirmPassword);
-  } catch (error) {
-    console.error("Password reset error:", error);
-    return { success: false, error: error.message };
-  }
-};
 export const logout = async () => {
-  try {
-    await account.deleteSession("current");
-    return { success: true };
-  } catch (error) {
-    console.error("Logout error:", error);
-    return { success: false, error: error.message };
-  }
+  await request("POST", "/auth/logout", null, true);
+  clearToken();
+  return { success: true };
 };
 
 export const getCurrentUser = async () => {
+  if (!getToken()) return { success: false, error: "Not authenticated" };
+  return await request("GET", "/auth/me", null, true);
+};
+
+export const changePassword = async (currentPassword, newPassword) => {
+  return await request("PUT", "/auth/change-password", { currentPassword, newPassword }, true);
+};
+
+export const updateProfile = async (name) => {
+  return await request("PUT", "/auth/profile", { name }, true);
+};
+
+// Stubs kept for compatibility (no-op in SQLite mode)
+export const sendPasswordResetEmail = async () => ({ success: false, error: "Use Settings → Account to change your password" });
+export const resetPassword = async () => ({ success: false, error: "Use Settings → Account to change your password" });
+export const verifyOTP = async () => ({ success: false, error: "Not supported" });
+
+// ─── Data CRUD ─────────────────────────────────────────────────────────────────
+export const getCollectionData = async (collection) => {
+  const res = await request("GET", `/data/${collection}`, null, true);
+  return res;
+};
+
+export const saveCollectionData = async (collection, data) => {
+  return await request("PUT", `/data/${collection}`, { data }, true);
+};
+
+// Kept for backwards compatibility with components that call these directly
+export const getDocuments = async (collection) => {
+  const res = await getCollectionData(collection);
+  return res.data ? [{ data: JSON.stringify(res.data) }] : [];
+};
+
+export const createDocument = async (collection, data) => {
+  return await saveCollectionData(collection, data);
+};
+
+export const updateDocument = async (collection, _, data) => {
+  return await saveCollectionData(collection, data);
+};
+
+// ─── Profile picture upload ────────────────────────────────────────────────────
+export const uploadProfilePicture = async (file) => {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+
   try {
-    const user = await account.get();
-    return {
-      success: true,
-      data: {
-        ...user,
-        email: user.email,
-        name: user.name,
-        id: user.$id,
-      },
-    };
-  } catch (error) {
-    if (error.code === 401) {
-      // User is not authenticated
-      return {
-        success: false,
-        error: "Not authenticated. An active session is missing.",
-      };
-    }
-    console.error("Get current user error:", error);
-    return { success: false, error: error.message };
+    const res = await fetch(`${BASE_URL}/upload/profile`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    return await res.json();
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 };
 
-export const createDocument = async (collectionId, data, userId) => {
-  if (!collectionId || !userId) return null;
-  if (!APPWRITE_DATABASE_ID) {
-    console.error(
-      "Appwrite database ID is missing. Set VITE_APPWRITE_DATABASE_ID in your .env file."
-    );
-    return null;
-  }
-
+// ─── Health check ──────────────────────────────────────────────────────────────
+export const checkBackendHealth = async () => {
   try {
-    return await databases.createDocument(
-      APPWRITE_DATABASE_ID,
-      collectionId,
-      "unique()",
-      {
-        userId,
-        data: JSON.stringify(data),
-      }
-    );
-  } catch (error) {
-    console.error(`Error creating document in ${collectionId}:`, error);
-    throw error;
+    const res = await fetch(`${BASE_URL}/health`);
+    const json = await res.json();
+    return { online: json.success === true };
+  } catch {
+    return { online: false };
   }
 };
 
-export const updateDocument = async (collectionId, documentId, data) => {
-  if (!collectionId || !documentId) return null;
-  if (!APPWRITE_DATABASE_ID) {
-    console.error(
-      "Appwrite database ID is missing. Set VITE_APPWRITE_DATABASE_ID in your .env file."
-    );
-    return null;
-  }
-
-  try {
-    return await databases.updateDocument(
-      APPWRITE_DATABASE_ID,
-      collectionId,
-      documentId,
-      {
-        data: JSON.stringify(data),
-      }
-    );
-  } catch (error) {
-    console.error(`Error updating document in ${collectionId}:`, error);
-    throw error;
-  }
-};
-
-export const getDocuments = async (collectionId, userId) => {
-  if (!collectionId || !userId) return [];
-  if (!APPWRITE_DATABASE_ID) {
-    console.error(
-      "Appwrite database ID is missing. Set VITE_APPWRITE_DATABASE_ID in your .env file."
-    );
-    return [];
-  }
-
-  try {
-    const response = await databases.listDocuments(
-      APPWRITE_DATABASE_ID,
-      collectionId,
-      [Query.equal("userId", userId)]
-    );
-    return response.documents;
-  } catch (error) {
-    console.error(`Error fetching documents from ${collectionId}:`, error);
-    throw error;
-  }
-};
-//URL Verification
-// export const verifyNewUser = async () => {
-//   const urlParams = new URLSearchParams(window.location.search);
-//   const secret = urlParams.get("secret");
-//   const userId = urlParams.get("userId");
-
-//   const promise = account.updateVerification(userId, secret);
-
-//   promise.then(
-//     function (response) {
-//       console.log("Verification was successful! \n", response); // Success
-//     },
-//     function (error) {
-//       console.log("there was some error verifying the user \n", error); // Failure
-//     }
-//   );
-// };
-
-// export const register = async (email, password, name) => {
-//   try {
-//     const user = await account.create("unique()", email, password, name);
-//     if (user) {
-//       // Send OTP to user's email
-//       await account.createEmailVerification(email);
-
-//       return {
-//         success: true,
-//         emailVerification: user.emailVerification,
-//         userId: user.$id, // Return userId for OTP verification
-//       };
-//     }
-//     return { success: false, error: "Registration failed" };
-//   } catch (error) {
-//     console.error("Registration error:", error);
-//     return { success: false, error: error.message };
-//   }
-// };
+// ─── Legacy exports (referenced across the codebase) ──────────────────────────
+// These are no-ops / stubs to avoid import errors during migration
+export const account = null;
+export const databases = null;
+export const storage = null;
+export const getConfig = () => ({});
+export const getStoredConfig = () => null;
+export const saveConfig = () => {};
+export const clearConfig = () => {};
+export const reinitializeClient = () => {};
+export const testConnection = async () => ({ success: false, error: "Not applicable" });
+export const getAccount = () => null;
+export const getDatabases = () => null;
+export const getStorage = () => null;
+export const ID = { unique: () => Math.random().toString(36).slice(2) };
+export const Query = { equal: () => {} };
