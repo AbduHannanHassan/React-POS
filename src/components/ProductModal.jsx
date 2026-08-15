@@ -40,12 +40,12 @@ function ProductModal({ isOpen, onClose, product: editingProduct }) {
     if (editingProduct) {
       setProduct({
         ...editingProduct,
-        retailPrice: editingProduct.retailPrice.toString(),
-        wholesalePrice: editingProduct.wholesalePrice.toString(),
-        purchaseRate: editingProduct.purchaseRate.toString(),
-        quantity: editingProduct.quantity.toString(),
-        minStockLevel: editingProduct.minStockLevel.toString() || "5",
-        minWholesaleQty: editingProduct.minWholesaleQty.toString() || "10",
+        retailPrice: (editingProduct.retailPrice ?? "").toString(),
+        wholesalePrice: (editingProduct.wholesalePrice ?? "").toString(),
+        purchaseRate: (editingProduct.purchaseRate ?? "").toString(),
+        quantity: (editingProduct.quantity ?? "").toString(),
+        minStockLevel: (editingProduct.minStockLevel ?? 5).toString(),
+        minWholesaleQty: (editingProduct.minWholesaleQty ?? 10).toString(),
       });
     } else {
       setProduct({

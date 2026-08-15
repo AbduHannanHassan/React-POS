@@ -9,7 +9,7 @@ const calculateTodayTotal = (sales) => {
   const today = new Date().toDateString();
   return sales
     .filter((sale) => new Date(sale.date).toDateString() === today)
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
 };
 
 const salesSlice = createSlice({

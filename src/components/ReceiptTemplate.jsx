@@ -41,9 +41,9 @@ const ReceiptTemplate = React.forwardRef(({ sale, paymentMethod }, ref) => {
             <tr key={item.id}>
               <td className="text-left py-1">{item.name}</td>
               <td className="text-right py-1">{item.quantity}</td>
-              <td className="text-right py-1">${item.price.toFixed(2)}</td>
+              <td className="text-right py-1">${(Number(item.price) || 0).toFixed(2)}</td>
               <td className="text-right py-1">
-                ${(item.quantity * item.price).toFixed(2)}
+                ${(Number(item.quantity) * (Number(item.price) || 0)).toFixed(2)}
               </td>
             </tr>
           ))}
@@ -54,11 +54,11 @@ const ReceiptTemplate = React.forwardRef(({ sale, paymentMethod }, ref) => {
       <div className="border-t border-black pt-2 mb-4">
         <div className="flex justify-between">
           <span>Subtotal:</span>
-          <span>${sale.total.toFixed(2)}</span>
+          <span>${(Number(sale.total) || 0).toFixed(2)}</span>
         </div>
         <div className="flex justify-between font-bold">
           <span>Total:</span>
-          <span>${sale.total.toFixed(2)}</span>
+          <span>${(Number(sale.total) || 0).toFixed(2)}</span>
         </div>
         <div className="flex justify-between mt-2">
           <span>Payment Method:</span>
