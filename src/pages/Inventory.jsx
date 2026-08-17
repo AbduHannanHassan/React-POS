@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { utils, writeFile } from "xlsx-js-style";
 import { Bars4Icon, Squares2X2Icon } from "@heroicons/react/24/outline";
@@ -7,6 +7,7 @@ import ExcelImportModal from "../components/ExcelImportModal";
 import InventoryTable from "../components/InventoryTable";
 import InventoryCardView from "../components/InventoryCardView";
 import InventoryFilters from "../components/InventoryFilters";
+import CategoryBar from "../components/CategoryBar";
 
 function Inventory() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -14,6 +15,7 @@ function Inventory() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [viewMode, setViewMode] = useState("card");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [filters, setFilters] = useState({
     category: "",
     stockStatus: "all",
@@ -25,6 +27,21 @@ function Inventory() {
     direction: "asc",
   });
   const { loading, products } = useSelector((state) => state.inventory);
+  const { categories: definedCategories } = useSelector(s => s.categories);
+
+  // Derive categories from defined + product data
+  const categories = useMemo(() => {
+    const fromProducts = new Set();
+    products.forEach(p => { if (p.category) fromProducts.add(p.category); });
+    const fromDefined = definedCategories.map(c => c.name);
+    return Array.from(new Set([...fromDefined, ...fromProducts])).sort();
+  }, [products, definedCategories]);
+
+  const productCounts = useMemo(() => {
+    const counts = {};
+    products.forEach(p => { if (p.category) counts[p.category] = (counts[p.category] || 0) + 1; });
+    return counts;
+  }, [products]);
 
   const handleEdit = (product) => {
     setEditingProduct(product);
@@ -33,15 +50,15 @@ function Inventory() {
 
   const filterProducts = (products) => {
     return products.filter((product) => {
-      // Search term filter
       const matchesSearch =
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchTerm.toLowerCase());
-
-      // Category filter
+        (product.category || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory =
         !filters.category || product.category === filters.category;
+      // Category bar filter
+      const matchesCategoryBar =
+        selectedCategory === "All" || product.category === selectedCategory;
 
       // Stock status filter
       let matchesStockStatus = true;
@@ -52,24 +69,17 @@ function Inventory() {
             matchesStockStatus = product.quantity > minStock;
             break;
           case "lowStock":
-            matchesStockStatus =
-              product.quantity > 0 && product.quantity <= minStock;
+            matchesStockStatus = product.quantity > 0 && product.quantity <= minStock;
             break;
           case "outOfStock":
             matchesStockStatus = product.quantity === 0;
             break;
         }
       }
-
-      // Price range filter
       const matchesPrice =
-        (!filters.minPrice ||
-          product.retailPrice >= Number(filters.minPrice)) &&
+        (!filters.minPrice || product.retailPrice >= Number(filters.minPrice)) &&
         (!filters.maxPrice || product.retailPrice <= Number(filters.maxPrice));
-
-      return (
-        matchesSearch && matchesCategory && matchesStockStatus && matchesPrice
-      );
+      return matchesSearch && matchesCategory && matchesCategoryBar && matchesStockStatus && matchesPrice;
     });
   };
 
@@ -144,6 +154,9 @@ function Inventory() {
           <button className="btn btn-secondary" onClick={exportToExcel}>
             Export Excel
           </button>
+          <a href="/inventory/categories" className="btn btn-secondary">
+            🏷️ Categories
+          </a>
           <button
             className="btn btn-primary"
             onClick={() => {
@@ -151,7 +164,7 @@ function Inventory() {
               setIsModalOpen(true);
             }}
           >
-            Add Product
+            + Add Product
           </button>
         </div>
       </div>
@@ -192,6 +205,14 @@ function Inventory() {
             <InventoryFilters
               onFilterChange={setFilters}
               onSortChange={setSortConfig}
+            />
+
+            {/* Horizontal category filter bar */}
+            <CategoryBar
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              productCounts={productCounts}
             />
           </div>
         </div>

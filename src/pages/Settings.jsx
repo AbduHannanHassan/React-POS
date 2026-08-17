@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ThemeToggle from "../components/ThemeToggle";
 import { changePassword, updateProfile } from "../config/appwrite";
 import { setUser } from "../store/slices/authSlice";
+import { setCardSize, setCustomColumns, setPosName, setLogoUrl } from "../store/slices/settingsSlice";
+import LogoIcon from "../assets/icon.svg";
 
 // ─── Spinner ───────────────────────────────────────────────────────────────────
 const Spinner = () => (
@@ -154,10 +156,198 @@ function AccountSettings() {
   );
 }
 
+// ─── Display Settings tab ─────────────────────────────────────────────────────
+function DisplaySettings() {
+  const dispatch = useDispatch();
+  const { cardSize, customColumns } = useSelector(s => s.settings);
+
+  const sizes = [
+    { id: "sm",  label: "Small",  desc: "4–5 columns",  preview: "grid-cols-5" },
+    { id: "md",  label: "Medium", desc: "2–3 columns",  preview: "grid-cols-3" },
+    { id: "lg",  label: "Large",  desc: "1–2 columns",  preview: "grid-cols-2" },
+    { id: "custom", label: "Custom", desc: "You choose", preview: null },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-bold text-text-primary mb-1">Product Card Size</h3>
+        <p className="text-sm text-text-secondary mb-4">Controls how product cards appear on the Sales &amp; Inventory pages.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {sizes.map(s => (
+            <button
+              key={s.id}
+              onClick={() => dispatch(setCardSize(s.id))}
+              className={`p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md ${
+                cardSize === s.id
+                  ? "border-accent-primary bg-hover-bg"
+                  : "border-border-color bg-bg-tertiary"
+              }`}
+            >
+              {/* Mini preview */}
+              <div className="flex gap-1 mb-3">
+                {s.preview
+                  ? Array.from({ length: s.id === "sm" ? 5 : s.id === "md" ? 3 : 2 }).map((_, i) => (
+                      <div key={i} className="flex-1 h-6 rounded bg-accent-primary opacity-30" />
+                    ))
+                  : <div className="flex gap-1 w-full">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="flex-1 h-6 rounded bg-accent-primary opacity-20" />)}</div>
+                }
+              </div>
+              <p className={`font-bold text-sm ${ cardSize === s.id ? "text-accent-primary" : "text-text-primary" }`}>{s.label}</p>
+              <p className="text-xs text-text-secondary">{s.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {cardSize === "custom" && (
+        <div>
+          <label className="block text-sm font-semibold text-text-secondary mb-2">
+            Number of Columns: <span className="text-accent-primary font-bold">{customColumns}</span>
+          </label>
+          <input
+            type="range" min={1} max={6} step={1}
+            value={customColumns}
+            onChange={e => dispatch(setCustomColumns(Number(e.target.value)))}
+            className="w-full accent-accent-primary"
+          />
+          <div className="flex justify-between text-xs text-text-tertiary mt-1">
+            {[1,2,3,4,5,6].map(n => <span key={n}>{n}</span>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Branding Settings tab ────────────────────────────────────────────────────
+function BrandingSettings() {
+  const dispatch = useDispatch();
+  const { posName, logoUrl } = useSelector(s => s.settings);
+  const [nameInput, setNameInput]   = useState(posName || "OrderUp");
+  const [logoInput, setLogoInput]   = useState(logoUrl  || "");
+  const [saved, setSaved]           = useState(false);
+  const fileRef = useRef(null);
+
+  const handleSave = () => {
+    dispatch(setPosName(nameInput.trim() || "OrderUp"));
+    dispatch(setLogoUrl(logoInput.trim()));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { setLogoInput(ev.target.result); };
+    reader.readAsDataURL(file);
+  };
+
+  const handleReset = () => {
+    setNameInput("OrderUp");
+    setLogoInput("");
+    dispatch(setPosName("OrderUp"));
+    dispatch(setLogoUrl(""));
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Live Preview */}
+      <div className="rounded-2xl border-2 border-dashed border-border-color p-5 flex items-center gap-4 bg-bg-tertiary">
+        <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center bg-white shadow">
+          {logoInput
+            ? <img src={logoInput} alt="logo" className="w-full h-full object-contain" />
+            : <img src={LogoIcon} alt="logo" className="w-8 h-8" />
+          }
+        </div>
+        <div>
+          <p className="text-lg font-bold text-text-primary">{nameInput || "OrderUp"}</p>
+          <p className="text-xs text-text-tertiary">Live sidebar preview</p>
+        </div>
+      </div>
+
+      {/* POS Name */}
+      <div>
+        <label className="block text-sm font-semibold text-text-secondary mb-1">POS / Business Name</label>
+        <input
+          type="text"
+          className="input"
+          value={nameInput}
+          onChange={e => setNameInput(e.target.value)}
+          placeholder="e.g. My Shop"
+          maxLength={30}
+        />
+        <p className="text-xs text-text-tertiary mt-1">Shown in the sidebar and receipts.</p>
+      </div>
+
+      {/* Logo */}
+      <div>
+        <label className="block text-sm font-semibold text-text-secondary mb-2">Logo</label>
+        <div className="flex gap-3 items-start flex-wrap">
+          <div className="w-16 h-16 rounded-xl border-2 border-border-color flex items-center justify-center bg-bg-tertiary overflow-hidden">
+            {logoInput
+              ? <img src={logoInput} alt="logo preview" className="w-full h-full object-contain" />
+              : <img src={LogoIcon} alt="default" className="w-8 h-8 opacity-40" />
+            }
+          </div>
+          <div className="flex-1 space-y-2">
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileRef}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="btn btn-secondary text-sm w-full"
+            >
+              📎 Upload Image
+            </button>
+            <div className="relative">
+              <input
+                type="url"
+                className="input text-sm"
+                value={logoInput}
+                onChange={e => setLogoInput(e.target.value)}
+                placeholder="Or paste image URL..."
+              />
+            </div>
+            {logoInput && (
+              <button onClick={() => setLogoInput("")} className="text-xs text-red-400 hover:text-red-600">
+                × Remove logo
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3 pt-2">
+        <button onClick={handleReset} className="btn btn-secondary text-sm">Reset to Default</button>
+        <button
+          onClick={handleSave}
+          className="btn btn-primary text-sm flex items-center gap-2"
+        >
+          {saved ? (
+            <><span>✓</span> Saved!</>
+          ) : (
+            "Save Branding"
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: "general", label: "General", icon: "⚙️" },
-  { id: "account", label: "Account", icon: "👤" },
+  { id: "general",  label: "General",  icon: "⚙️" },
+  { id: "branding", label: "Branding", icon: "🎨" },
+  { id: "display",  label: "Display",  icon: "🖥️" },
+  { id: "account",  label: "Account",  icon: "👤" },
 ];
 
 // ─── Main Settings page ────────────────────────────────────────────────────────
@@ -187,11 +377,14 @@ function Settings() {
           ))}
         </div>
 
-        {activeTab === "general" && (
+        {activeTab === "general"  && (
           <div className="space-y-4">
             <ThemeToggle />
           </div>
         )}
+
+        {activeTab === "branding" && <BrandingSettings />}
+        {activeTab === "display"  && <DisplaySettings />}
 
         {activeTab === "account" && (
           user

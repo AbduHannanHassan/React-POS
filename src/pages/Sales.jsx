@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import {
   addItem,
@@ -14,6 +14,7 @@ import ProductCard from "../components/ProductCard";
 import CartItem from "../components/CartItem";
 import BillTypeSelector from "../components/BillTypeSelector";
 import PaymentSection from "../components/PaymentSection";
+import CategoryBar from "../components/CategoryBar";
 import { formatPrice } from "../utils/priceFormatters";
 import { calculateDiscountedPrice } from "../utils/discountCalculator";
 
@@ -24,15 +25,49 @@ function Sales() {
   const [currentSale, setCurrentSale] = useState(null);
   const [billType, setBillType] = useState("retail");
   const [showPayment, setShowPayment] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const { products } = useSelector((state) => state.inventory);
   const { items: cartItems, total } = useSelector((state) => state.cart);
+  const { categories: definedCategories } = useSelector(s => s.categories);
+  const { cardSize, customColumns } = useSelector(s => s.settings);
   const dispatch = useDispatch();
 
-  const filteredProducts = products.filter(
-    (product) =>
+  // Grid class based on cardSize setting
+  const gridClass = useMemo(() => {
+    if (cardSize === "sm")     return "grid grid-cols-2 md:grid-cols-4 gap-3";
+    if (cardSize === "lg")     return "grid grid-cols-1 md:grid-cols-2 gap-4";
+    if (cardSize === "custom") return `grid gap-3`;
+    return "grid grid-cols-1 md:grid-cols-2 gap-4"; // md default
+  }, [cardSize]);
+
+  const gridStyle = cardSize === "custom" ? { gridTemplateColumns: `repeat(${customColumns}, minmax(0, 1fr))` } : {};
+
+  // Derive unique categories — prefer Redux-defined categories, fallback to product data
+  const categories = useMemo(() => {
+    const fromProducts = new Set();
+    products.forEach(p => { if (p.category) fromProducts.add(p.category); });
+    const fromDefined = definedCategories.map(c => c.name);
+    const merged = new Set([...fromDefined, ...fromProducts]);
+    return Array.from(merged).sort();
+  }, [products, definedCategories]);
+
+  // Count products per category
+  const productCounts = useMemo(() => {
+    const counts = {};
+    products.forEach((p) => {
+      if (p.category) counts[p.category] = (counts[p.category] || 0) + 1;
+    });
+    return counts;
+  }, [products]);
+
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory =
+      selectedCategory === "All" || product.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   const handleAddToCart = (product) => {
     if (product.quantity > 0) {
@@ -166,15 +201,37 @@ function Sales() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={handleAddToCart}
-                billType={billType}
-              />
-            ))}
+
+          {/* Category filter bar */}
+          <CategoryBar
+            categories={categories}
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            productCounts={productCounts}
+          />
+
+          {/* Product grid */}
+          <div className={gridClass} style={gridStyle}>
+            {filteredProducts.length === 0 ? (
+              <div className="col-span-2 flex flex-col items-center justify-center py-16 text-center">
+                <span className="text-5xl mb-3">🔍</span>
+                <p className="text-text-secondary font-medium">No products found</p>
+                <p className="text-text-tertiary text-sm mt-1">
+                  {selectedCategory !== "All"
+                    ? `No products in "${selectedCategory}" category`
+                    : "Try a different search term"}
+                </p>
+              </div>
+            ) : (
+              filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                  billType={billType}
+                />
+              ))
+            )}
           </div>
         </div>
         <div className="space-y-4">
